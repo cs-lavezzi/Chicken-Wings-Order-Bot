@@ -33,23 +33,25 @@
     - Add the following required values:
       ```
       TELEGRAM_BOT_TOKEN=<your_telegram_bot_token>
-      FIREBASE_CREDENTIALS=<your_firebase_credentials_file>
+      FIREBASE_CREDENTIALS=<path_to_your_firebase_credentials.json>
       SHEETS_API_KEY=<your_google_sheets_api_key>
-      ```
+      ```  
 
-4. Start the bot:
+4. Run the bot:
    ```bash
-   python main.py
+   python bot.py
    ```
 
 ### 🚀 Usage
 
-1. **Interact with the bot:** Send `/start` to initiate the conversation with the bot.
+1. **Start the Bot:**
+    - Open Telegram and start the bot using the `/start` command.
 2. **Place an Order:**
-    - Select products from the list.
-    - Choose the desired quantity.
-    - Confirm the order and choose a payment option (Click, Payme, or Cash).
-3. **Order Logging:** Orders will be logged in a connected Google Sheet for tracking.
+    - Browse available products.
+    - Select quantity and confirm your order.
+    - Choose your payment method (Click, Payme, or Cash).
+3. **Order Management:**
+    - All orders are logged into a Google Spreadsheet for easy tracking.
 
 ### 🤝 Contributing
 
