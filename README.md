@@ -39,7 +39,7 @@
 
 4. Run the bot:
    ```bash
-   python bot.py
+   python main.py
    ```
 
 ### 🚀 Usage
