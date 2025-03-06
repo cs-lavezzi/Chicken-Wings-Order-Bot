@@ -3,65 +3,49 @@ from firebase_admin import credentials, firestore
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
+# Firebase xizmat hisobini yuklash
+cred = credentials.Certificate("serviceAccountKey.json")
+firebase_admin.initialize_app(cred)
 
-def initialize_firebase():
-    """Initializes Firebase connection."""
-    try:
-        cred = credentials.Certificate(
-            "path/to/your/firebase_credentials.json")  # Replace with your Firebase credentials file
-        firebase_admin.initialize_app(cred, {'databaseURL': 'YOUR_DATABASE_URL'})  # Replace with your database URL
-        print("Firebase initialized successfully.")
-        return firestore.client()
-    except FileNotFoundError:
-        print("Error: Firebase credentials file not found. Please check the file path.")
-        return None
-    except firebase_admin.exceptions.FirebaseError as e:
-        print(f"Error initializing Firebase: {e}")
-        return None
+# Firestore bilan bog'lash
+db = firestore.client()
 
+# Foydalanuvchi tilini saqlash
+def save_user_language(user_id: int, language: str):
+    """Foydalanuvchi tilini Firebase-da saqlash."""
+    db.collection("users").document(str(user_id)).set({"language": language}, merge=True)
 
-db = initialize_firebase()
+# Foydalanuvchi tilini olish
+def get_user_language(user_id: int) -> str:
+    """Foydalanuvchi tilini Firebase-dan olish. Agar yo‘q bo‘lsa, 'uz' qaytariladi."""
+    doc = db.collection("users").document(str(user_id)).get()
+    if doc.exists:
+        return doc.to_dict().get("language", "uz")
+    return "uz"
 
+# Foydalanuvchi ma'lumotlarini saqlash
+def save_user_data(user_id: int, user_data: dict):
+    """Foydalanuvchi haqida qo‘shimcha ma'lumotlarni saqlash."""
+    db.collection("users").document(str(user_id)).set(user_data, merge=True)
 
-def initialize_google_sheets():
-    """Initializes Google Sheets connection."""
-    scope = ['https://spreadsheets.google.com/feeds',
-             'https://www.googleapis.com/auth/drive']  # If modifying these scopes, delete the file token.json.
-    try:
-        creds = ServiceAccountCredentials.from_json_keyfile_name(
-            'path/to/your/google_sheets_credentials.json',
-            scope)  # Replace with your Google Sheets credentials file
-        client = gspread.authorize(creds)
-        print("Google Sheets initialized successfully.")
-        # Replace with your spreadsheet name or ID
-        spreadsheet_name = "Your Spreadsheet Name"  # or spreadsheet_id
-        return client.open(spreadsheet_name).sheet1
-    except FileNotFoundError:
-        print("Error: Google Sheets credentials file not found. Please check the file path.")
-        return None
-    except gspread.exceptions.APIError as e:
-        print(f"Error initializing Google Sheets: {e}")
-        return None
+# Foydalanuvchi ma'lumotlarini olish
+def get_user_data(user_id: int) -> dict:
+    """Foydalanuvchi haqida barcha ma'lumotlarni olish."""
+    doc = db.collection("users").document(str(user_id)).get()
+    if doc.exists:
+        return doc.to_dict()
+    return {}
 
+# Buyurtmalarni Firebase-ga saqlash
+def save_order(user_id: int, order_data: dict):
+    """Foydalanuvchi buyurtmasini Firebase-da saqlash."""
+    order_ref = db.collection("orders").document()
+    order_data["user_id"] = user_id
+    order_data["order_id"] = order_ref.id  # Unikal order ID
+    order_ref.set(order_data)
 
-sheet = initialize_google_sheets()
-
-
-def add_data_to_firebase(data):
-    """Adds data to Firebase."""
-    doc_ref = db.collection("your_collection").document()  # Replace "your_collection"
-    doc_ref.set(data)
-    print(f"Data added to Firebase: {data}")
-
-
-def add_data_to_google_sheets(data):
-    """Adds data to Google Sheets."""
-    sheet.append_row(list(data.values()))  # Convert dictionary values to a list
-    print(f"Data added to Google Sheets: {data}")
-
-
-# Example usage (replace with your actual data)
-data = {"name": "John Doe", "age": 30, "city": "New York"}
-
-add_data_to_firebase(data)
-add_data_to_google_sheets(data)
+# Foydalanuvchi buyurtmalarini olish
+def get_orders(user_id: int):
+    """Foydalanuvchining barcha buyurtmalarini olish."""
+    orders = db.collection("orders").where("user_id", "==", user_id).stream()
+    return [order.to_dict() for order in orders]
