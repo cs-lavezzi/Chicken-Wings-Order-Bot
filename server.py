@@ -1,119 +1,76 @@
 import logging
 import asyncio
 import os
-from aiogram import Bot, Dispatcher, types
-from aiogram.fsm.context import FSMContext
-from aiogram.client.default import DefaultBotProperties
-from aiogram.types import Update, CallbackQuery
-from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from aiohttp import web
 from dotenv import load_dotenv
 
-load_dotenv() # .env faylini yuklash
+from aiogram import Bot, Dispatcher
+from aiohttp import web
+from aiogram.types import Update
+from main import bot
 
-# Bot tokeni va webhook URL
-TOKEN = ("7937053541:AAFBhf4CPwNiaCV1KmU59Fy0aSPxDSUNW4w")
-WEBHOOK_HOST = ("https://76cb-37-110-215-71.ngrok-free.app") # https://your.domain
-WEBHOOK_PATH = "/webhook" # Webhook URL
-WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
+load_dotenv()
 
-# Server sozlamalari
-WEBAPP_HOST = "0.0.0.0"  # Lokal server
-WEBAPP_PORT = 8080
+# Logging settings
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s]: %(message)s",
+    datefmt="%d-%m-%Y %H:%M:%S",
+)
 
-# Logging sozlamalari
-logging.basicConfig(level=logging.INFO)
+# Telegram bot secret token for validation
+TELEGRAM_SECRET_TOKEN = os.getenv("BOT_TOKEN") # add your token here from .env file
+if not TELEGRAM_SECRET_TOKEN:
+    raise ValueError("TELEGRAM_SECRET_TOKEN must be set in environment variables!")
 
-# Bot va Dispatcher yaratish
-bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
-dp = Dispatcher(storage=MemoryStorage()) # MemoryStorage bilan Dispatcher yaratish
+# Webhook settings
+WEBHOOK_HOST = os.getenv("WEBHOOK_URL") # https://your.domain
+if not WEBHOOK_HOST:
+    raise ValueError("WEBHOOK_HOST must be set in environment variables!")
 
-# Foydalanuvchi tilini saqlash uchun dict
-user_language = {}
+WEBHOOK_PATH = "/webhook" # Should match the path that was set on webhook creation
+WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}" # Full path to webhook
 
-# /start kommandasi uchun handler
-@dp.message()
-async def start_cmd(message: types.Message):
-    if message.text == "/start":
-        await message.answer("Tilni tanlang:", reply_markup=language_keyboard())
+# Server settings
+WEBAPP_HOST = "0.0.0.0"  # Local server
+WEBAPP_PORT = 8080 # Port for the server
 
-# Til tanlash tugmalari
-def language_keyboard():
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🇺🇿 O'zbek", callback_data="lang_uz"),
-         InlineKeyboardButton(text="🇷🇺 Русский", callback_data="lang_ru"),
-         InlineKeyboardButton(text="🇬🇧 English", callback_data="lang_en")]
-    ])
-    return keyboard
+dp = Dispatcher()
 
-# Tilni tanlash callback funksiyasi
-@dp.callback_query(lambda c: c.data.startswith("lang_"))
-async def change_language(callback: CallbackQuery, state: FSMContext):
-    lang_code = callback.data.split("_")[1]
-    user_id = callback.from_user.id
-
-    # Foydalanuvchining tanlagan tilini saqlaymiz
-    user_language[user_id] = lang_code
-
-    # Til o'zgargani haqida habar yuboramiz
-    messages = {
-        "uz": "Til O'zbek tiliga o'zgartirildi ✅",
-        "ru": "Язык изменён на Русский ✅",
-        "en": "Language changed to English ✅"
-    }
-
-    await callback.message.answer(messages[lang_code])
-    await callback.answer()
-
-@dp.message()
-async def send_welcome(message: types.Message):
-    user_id = message.from_user.id
-    lang = user_language.get(user_id, "uz")  # Agar til tanlanmagan bo'lsa, "uz"
-
-    messages = {
-        "uz": "Assalomu alaykum! Botga xush kelibsiz.",
-        "ru": "Здравствуйте! Добро пожаловать в бот.",
-        "en": "Hello! Welcome to the bot."
-    }
-
-    await message.answer(messages[lang], reply_markup=language_keyboard())
-
-# Webhookni sozlash
-async def on_startup():
-    await bot.set_webhook(WEBHOOK_URL)
-    logging.info(f"Webhook o'rnatildi: {WEBHOOK_URL}")
-
-async def on_shutdown():
-    await bot.delete_webhook()
-    logging.info("Webhook o'chirildi.")
-
-# Webhookni qabul qilish uchun handler
 async def handle_webhook(request):
-    data = await request.json()
-    update = Update.model_validate(data)
-    await dp.feed_update(bot, update)
+    """ Accepts incoming webhook requests """
+    logging.info("Webhook request received")
+
+    # Check the Telegram secret token
+    if request.headers.get("X-Telegram-Bot-Api-Secret-Token") != TELEGRAM_SECRET_TOKEN:
+        logging.warning("Unauthorized access detected.")
+        return web.Response(status=403, text="Forbidden")
+
+    update = Update(**await request.json()) # Correctly parse the update
+    await dp.process_update(update) # Dispatch the update to the dp
     return web.Response(text="OK")
 
-# Web serverni ishga tushirish
-async def main():
-    app = web.Application()
-    app.router.add_post(WEBHOOK_PATH, handle_webhook)
 
-    # Botni ishga tushirish
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, WEBAPP_HOST, WEBAPP_PORT)
-    await site.start()
-
-    await on_startup()
+async def on_startup():
+    """ When bot is started webhook URL is set """
     try:
-        while True:
-            await asyncio.sleep(3600)
-    except KeyboardInterrupt:
-        pass
-    finally:
-        await on_shutdown()
+        await bot.set_webhook(WEBHOOK_URL, secret_token=TELEGRAM_SECRET_TOKEN)
+        logging.info(f"Webhook set up at {WEBHOOK_URL}")
+    except Exception as e:
+        logging.error(f"Failed to set webhook: {e}")
 
+
+async def on_shutdown():
+    """ When bot is stopped webhook URL is deleted """
+    await bot.session.close()
+
+
+# AIOHTTP server initialization
+app = web.Application()
+app.router.add_post(WEBHOOK_PATH, handle_webhook)
+app.on_startup.append(on_startup) # Pass the coroutine function directly
+app.on_shutdown.append(on_shutdown) # Pass the coroutine function directly
+
+# Start the server
 if __name__ == "__main__":
-    asyncio.run(main())
+    web.run_app(app, host=WEBAPP_HOST,
+                port=WEBAPP_PORT)
