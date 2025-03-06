@@ -1,68 +1,50 @@
-import logging
-from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler
-from registration import name, contact, location, verify
-from order import order
-from lang import start, choose_lang
+import os
+from dotenv import load_dotenv
 
-# Enable logging
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
-logger = logging.getLogger(__name__)
+from aiogram import Bot, Dispatcher, types
+from aiogram.filters import Command
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from firebase_google_sheets_integration import save_user_language, get_user_language, save_user_data, get_user_data, save_order, get_orders
 
-# Define states
-LANG, NAME, CONTACT, LOCATION, VERIFY, ORDER = range(6)
+# Load environment variables
+load_dotenv()
 
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Cancels the conversation and ends it."""
-    user = update.message.from_user
-    logger.info("User %s canceled the conversation. Message text: '%s'", user.first_name, update.message.text)
-    await update.message.reply_text('Bye! Hope to see you again soon.')
-    return ConversationHandler.END
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 
-def main() -> None:
-    """Runs the bot using webhook."""
-    bot_token = "7937053541:AAFBhf4CPwNiaCV1KmU59Fy0aSPxDSUNW4w"  # Replace with your bot token
-    webhook_url = "https://yourdomain.com/your_webhook_path"  # Replace with your webhook URL
+bot = Bot(token=BOT_TOKEN)
+dp = Dispatcher()
 
-    try:
-        application = Application.builder().token(bot_token).build()
-        logger.info("Bot application initialized successfully with the provided token.")
-    except Exception as e:
-        logger.error("Error initializing bot application: %s", str(e))
-        return
+# Language selection
+language_button = ReplyKeyboardMarkup(
+    keyboard= [
+        [
+            KeyboardButton(text="🇺🇿 O'zbekcha"),
+            KeyboardButton(text="🇷🇺 Русский"),
+            KeyboardButton(text="🇬🇧 English")
+        ]
+    ],
+    resize_keyboard=True
+)
 
-    # Configure the ConversationHandler
-    conv_handler = ConversationHandler(
-        entry_points=[CommandHandler('start', start)],
-        states={
-            LANG: [MessageHandler(filters.TEXT & ~filters.COMMAND, choose_lang)],
-            NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, name)],
-            CONTACT: [MessageHandler(filters.TEXT & ~filters.COMMAND, contact)],
-            LOCATION: [MessageHandler(filters.LOCATION, location)],
-            VERIFY: [MessageHandler(filters.TEXT & ~filters.COMMAND, verify)],
-            ORDER: [MessageHandler(filters.TEXT & ~filters.COMMAND, order)],
-        },
-        fallbacks=[CommandHandler('cancel', cancel)],
-    )
 
-    try:
-        application.add_handler(conv_handler)
-        logger.info("ConversationHandler added successfully.")
-    except Exception as e:
-        logger.error("Error adding ConversationHandler: %s", str(e))
-        return
+@dp.message(Command("start"))
+async def start_command(message: types.Message):
+    """ When user is starting the bot then this function will be called """
+    user_id = message.from_user.id
+    lang = get_user_language(user_id) # Getting user language from Firebase
+    await message.answer("Tilni tanlang! ✅", reply_markup=language_button)
 
-    # Webhook setup
-    try:
-        application.run_webhook(
-            listen="0.0.0.0",  # Address to listen on
-            port=8443,  # Port exposed for webhook traffic
-            url_path="your_webhook_path",  # URL path for the webhook
-            webhook_url=webhook_url  # Your webhook URL
-        )
-        logger.info("Webhook started successfully on 0.0.0.0:8443 with path 'your_webhook_path'")
-    except Exception as e:
-        logger.error("Error starting webhook: %s", str(e))
 
-if __name__ == '__main__':
-    main()
+@dp.message()
+async def select_language(message: types.Message):
+    """ User selects the language and saves it to Firebase """
+    user_id = message.from_user.id
+    text = message.text.lower()
+
+    languages = {"🇺🇿 o'zbekcha": "uz", "🇷🇺 русский": "ru", "🇬🇧 english": "en"}
+
+    if text in languages:
+        save_user_language(user_id, languages[text]) # Saving user language to Firebase
+        await message.answer("Til tanlandi! ✅")
+    else:
+        await message.answer("Tilni tanlang! ✅", reply_markup=language_button)
