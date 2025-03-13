@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
-from firebase_google_sheets_integration import save_user_language, get_user_language, save_user_data, get_user_data, save_order, get_orders
+from firebase_google_sheets_integration import save_user_language, get_user_language
 
 # Load environment variables
 load_dotenv()

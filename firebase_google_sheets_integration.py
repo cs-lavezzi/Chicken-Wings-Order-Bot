@@ -5,7 +5,9 @@ from oauth2client.service_account import ServiceAccountCredentials
 
 # Firebase xizmat hisobini yuklash
 cred = credentials.Certificate("serviceAccountKey.json")
-firebase_admin.initialize_app(cred)
+firebase_admin.initialize_app(cred, {
+      "databaseURL": "https://fir-order-bot-default-rtdb.europe-west1.firebasedatabase.app"
+})
 
 # Firestore bilan bog'lash
 db = firestore.client()

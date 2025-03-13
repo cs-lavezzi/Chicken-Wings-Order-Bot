@@ -32,7 +32,7 @@ WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}" # Full path to webhook
 
 # Server settings
 WEBAPP_HOST = "0.0.0.0"  # Local server
-WEBAPP_PORT = 8080 # Port for the server
+WEBAPP_PORT = 5050 # Port for the server
 
 dp = Dispatcher()
 
@@ -41,16 +41,16 @@ async def handle_webhook(request):
     logging.info("Webhook request received")
 
     # Check the Telegram secret token
-    if request.headers.get("X-Telegram-Bot-Api-Secret-Token") != TELEGRAM_SECRET_TOKEN:
-        logging.warning("Unauthorized access detected.")
-        return web.Response(status=403, text="Forbidden")
+    # if request.headers.get("X-Telegram-Bot-Api-Secret-Token") != TELEGRAM_SECRET_TOKEN:
+    #     logging.warning("Unauthorized access detected.")
+    #     return web.Response(status=403, text="Forbidden")
 
     update = Update(**await request.json()) # Correctly parse the update
     await dp.process_update(update) # Dispatch the update to the dp
     return web.Response(text="OK")
 
 
-async def on_startup():
+async def on_startup(app):
     """ When bot is started webhook URL is set """
     try:
         await bot.set_webhook(WEBHOOK_URL, secret_token=TELEGRAM_SECRET_TOKEN)
@@ -59,14 +59,14 @@ async def on_startup():
         logging.error(f"Failed to set webhook: {e}")
 
 
-async def on_shutdown():
+async def on_shutdown(app):
     """ When bot is stopped webhook URL is deleted """
     await bot.session.close()
 
 
 # AIOHTTP server initialization
 app = web.Application()
-app.router.add_post(WEBHOOK_PATH, handle_webhook)
+# app.router.add_post(WEBHOOK_PATH, handle_webhook)
 app.on_startup.append(on_startup) # Pass the coroutine function directly
 app.on_shutdown.append(on_shutdown) # Pass the coroutine function directly
 
