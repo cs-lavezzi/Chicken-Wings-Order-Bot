@@ -4,5 +4,4 @@ __pycache__/
 config/*.json
 .env
 
-serviceAccountKey.json
-serviceAccountKey.json
+JSON/serviceAccountKey.json
